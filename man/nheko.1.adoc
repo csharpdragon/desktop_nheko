@@ -1,0 +1,297 @@
+= nheko(1)
+:doctype:       manpage
+:Date:          2022-01-27
+:Revision:      @PROJECT_VERSION@
+:man source:    nheko
+:man manual:    General Commands Manual
+
+== NAME
+
+nheko - Desktop client for Matrix using Qt and C++17
+
+== SYNOPSIS
+
+*nheko* [_OPTIONS_]
+
+== DESCRIPTION
+
+The motivation behind the project is to provide a native desktop app for Matrix
+that feels more like a mainstream chat app (Element, Telegram etc) and less like
+an IRC client.
+
+== OPTIONS
+
+*-h*, *--help*::
+Displays help on commandline options.
+
+*--help-all*::
+Displays help including Qt specific options.
+
+*-v*, *--version*::
+Displays version information.
+
+*--debug*::
+Alias for _--log-level trace_.
+
+*-l*, *--log-level* _<level>_::
+Set the global log level, or a comma-separated list of _<component>=<level>_
+pairs, or both. For example, to set the default log level to _warn_ but
+disable logging for the _ui_ component, pass _warn,ui=off_.
++
+levels: _trace_ _debug_ _info_ _warning_ _error_ _critical_ _off_
++
+components: _crypto_ _db_ _mtx_ _net_ _qml_ _ui_
++
+Log levels can also be set in the NHEKO_LOG_LEVEL environment variable, using
+the same syntax. It will be overridden by this command line option.
+
+*-L*, *--log-type* _<type>_::
+Set the log output type. A comma-separated list is allowed. The default is _file,stderr_.
++
+types: _file_ _stderr_ _none_
++
+The log type can also be set in the NHEKO_LOG_TYPE environment variable,
+which will be overridden by this command line option.
+
+*-p* _<profile>_, *--profile* _<profile>_::
+Creates a unique profile, which allows you to log into several accounts at the
+same time and start multiple instances of nheko. Use _default_ to start with the
+default profile.
+
+== FAQ
+
+=== How do I add stickers and custom emojis?
+
+Stickers and custom emojis are organized in image packs. There is one user image
+pack that only your account has access to and there are room image packs that
+are accessible by everyone in the room they are defined in. You can activate a
+room image pack globally to use it in any room.
+
+To manage image packs in nheko, go to the room settings and enter the Sticker &
+Emote Settings. You will see the Private pack (your user image pack) and can
+edit it there. The Shortcode is a unique identifier you use to select the image
+with and the Body is the alternate text that is displayed on clients that don't
+support images (like the alt tag in HTML images).
+
+If you have the necessary permissions you can create new room packs with the
+button at the bottom of the image pack list. They are the same as the user pack
+but you can create as many as you want and everyone in the room can use them. It
+might be a good idea to create an extra room just for your image packs to make
+sharing easier.
+
+== COMPLETERS
+
+Completers spawn a popup with completion candidates when you type them in
+the input line.
+
+*@*::
+Open username completer.
+
+*#*::
+Open room completer.
+
+*:*::
+Open the emoji picker. Unicode emoji are inserted directly. Custom emoji will
+insert the HTML code for them into the input line. You can configure custom
+emoji in the room settings.
+
+== KEYBOARD SHORTCUTS
+
+=== Room list
+
+*Ctrl-Up/Ctrl-Down*::
+Navigate within the room list.
+
+*Ctrl-W*::
+Close the currently open room.
+
+*Ctrl-K*::
+Search and select rooms from the room list.
+
+*Alt-A*, *Ctrl-Shift-A*::
+Select next room with activity.
+
+=== Timeline/Messaging
+
+*PgUp/PgDn*::
+Scroll timeline per page.
+
+*Alt-Up/Alt-Down*::
+Reply to a message.
+
+*Up/Down*::
+Edit a message.
+
+*Ctrl-E*::
+Edit message currently selected as reply.
+
+*Alt-F*::
+Forward message currently selected as reply.
+
+*Ctrl-P/Ctrl-N*::
+Reenter previous/next message.
+
+*Ctrl-U*::
+Delete everything in the input line.
+
+*Ctrl-Left/Ctrl-Right*::
+Jump one word left/right in the input line.
+
+*Shift-Enter*::
+Insert line break.
+
+*Enter*::
+Submit message.
+
+== COMMANDS
+
+Commands only work when they are used at the beginning of text.
+
+=== Custom messages
+
+*/me* _<message>_::
+Send a message as an emote, where your username is prefixed.
+
+*/react* _<text>_::
+Send a message as a reaction when you’re replying to a message.
+
+*/md* _<message>_::
+Force Markdown when sending the current message.
+
+*/cmark* _<message>_::
+Disables most of our extensions to cmark (CommonMark), including the
+newline-in-input = newline-in-output behaviour, strikethrough and spoilers. You
+may still force newlines with 2 spaces or a backslash before the line ending or
+insert HTML elements.
+
+*/plain* _<message>_::
+Force plain text when sending the current message.
+
+*/rainbow* _<message>_::
+Send a message in rainbow colors.
+
+*/rainbowme* _<message>_::
+Send a message as a rainbow-colored emote, where your username is prefixed.
+
+*/notice* _<message>_::
+Send a message as a notice.
+
+*/rainbownotice* _<notice>_::
+Send a message as a rainbow-colored notice.
+
+=== Room management
+
+*/join* _<roomname>_ _[reason]_::
+Join a room. _reason_ is optional.
+
+*/knock* _<roomname>_ _[reason]_::
+Ask to join a room. _reason_ is optional.
+
+*/part*, */leave* _[reason]_::
+Leave the current room. _reason_ is optional.
+
+*/invite* _<username>_ _[reason]_::
+Invite a user into the current room. _reason_ is optional.
+
+*/kick* _<username>_ _[reason]_::
+Kick a user from the current room. _reason_ is optional.
+
+*/ban* _<username>_ _[reason]_::
+Ban a user from the current room. _reason_ is optional.
+
+*/unban* _<username>_ _[reason]_::
+Unban a user. _reason_ is optional.
+
+*/redact* _<username>_ _[reason]_::
+Redacts all visible messages of the specified user. You will run into rate limits quickly.
+
+*/redact* _<eventid>_ _[reason]_::
+Redacts a specific event.
+
+*/roomnick* _<roomname>_::
+Change your nickname in a single room.
+
+=== Emoticons
+
+*/shrug* _[message]_::
+Inserts `¯\_(ツ)_/¯` followed by an optional _message_.
+
+*/fliptable*::
+Inserts `(╯°□°)╯︵ ┻━┻`
+
+*/unfliptable*::
+Inserts `┯━┯╭( º _ º╭)`
+
+*/sovietflip*::
+Inserts `ノ┬─┬ノ ︵ ( \\o°o)\\`
+
+=== Advanced
+
+*/clear-timeline*::
+Removes all but the most recent messages from the currently rendered timeline
+and then refetches it from the server; can be used to fix some cache issues.
+
+*/reset-state*::
+Fetches all the state events in the current room again; can be used to fix some
+cache issues.
+
+*/rotate-megolm-session*::
+Rotates the encryption key used to send encrypted messages in a room.
+
+*/goto* _<address>_::
+
+_address_ can be one of:
+
+    _<event ID>_;;
+    Jumps to event with the specified ID and highlights it.
+
+    _<message index>_;;
+    Jumps to the message with the specified index and highlights it.
+
+    _<Matrix URI>_;;
+    Handles Matrix URI as if you clicked on it.
+
+*/converttodm*::
+Converts a room to a direct conversation.
+
+*/converttoroom*::
+Converts a direct conversation to a normal room.
+
+== MARKDOWN EXTENSIONS
+
+*newline (+\n+)*::
+A single newline will be turned into `<br>` instead of a space.
+
+*+~~text~~+*::
+Make text strikethrough. HTML putput: `<del>text</del>`
+
+*`||spoiler warning|text||`*::
+Hide text and set an optional spoiler warning. Note that Nheko does not display
+the spoiler warning currently. HTML output:
+`<span data-mx-spoiler="spoiler">text</span>`
+
+== ENVIRONMENT
+
+*NHEKO_ALLOW_QML_DISK_CACHE*::
+Nheko by default disables the qml disk cache to prevent crashes. This allows
+you to reenable it at your own risk.
+
+== FILES
+
+*Configuration file*::
+`${XDG_CONFIG_HOME:-~/.config}/nheko/nheko.conf`
+
+*Log file*::
+`${XDG_CACHE_HOME:-~/.cache}/nheko/nheko/nheko.log`
+
+*Database*::
+`${XDG_DATA_HOME:-~/.local/share}/nheko/nheko/*/data.mdb`
+
+*Media cache*::
+`${XDG_CACHE_HOME:-~/.cache}/nheko/nheko/media_cache`
+
+
+== REPORTING BUGS
+
+Please report issues on our bug tracker at
+<https://github.com/Nheko-Reborn/nheko/issues>.

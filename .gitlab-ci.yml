@@ -1,0 +1,338 @@
+stages:
+  - build
+  - sign
+  - deploy
+
+variables:
+  CCACHE_COMPILERCHECK: content
+  CCACHE_DIR: "${CI_PROJECT_DIR}/.ccache"
+  # prevent configure tzdata hanging apt install commands
+  DEBIAN_FRONTEND: noninteractive
+
+build-clazy:
+  stage: build
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:latest
+  tags: [docker]
+  variables:
+    CLAZY_CHECKS: level0,level1,no-non-pod-global-static
+    TRAVIS_OS_NAME: linux
+  before_script:
+    - echo -e "\e[0Ksection_start:`date +%s`:install_deps[collapsed=true]\r\e[0K\e[1m\e[95mInstalling apk dependencies"
+    - apk add	asciidoctor cmake cmark-dev gst-plugins-bad-dev gst-plugins-base-dev gstreamer-dev lmdb-dev lmdbxx nlohmann-json olm-dev openssl-dev qt6-qtbase-dev qt6-qtdeclarative-dev qt6-qtmultimedia-dev qt6-qtsvg-dev qt6-qttools-dev samurai spdlog-dev xcb-util-wm-dev zlib-dev ccache curl-dev libevent-dev meson clazy clang16 gcc musl-dev git re2-dev libsecret-dev
+    - echo -e "\e[0Ksection_end:`date +%s`:install_deps\r\e[0K"
+  script:
+    - export PATH="/usr/lib/ccache:${PATH}"
+    - export CMAKE_BUILD_PARALLEL_LEVEL=$(cat /proc/cpuinfo | awk '/^processor/{print $3}' | wc -l)
+    - cmake -GNinja -H. -Bbuild
+        -DCMAKE_INSTALL_PREFIX=.deps/usr
+        -DHUNTER_ENABLED=OFF -DBUILD_SHARED_LIBS=OFF -DUSE_BUNDLED_OPENSSL=ON -DUSE_BUNDLED_MTXCLIENT=ON -DUSE_BUNDLED_COEURL=ON -DUSE_BUNDLED_OLM=ON -DUSE_BUNDLED_QTKEYCHAIN=ON
+        -DVOIP=OFF
+        -DCMAKE_BUILD_TYPE=Release
+        -DCI_BUILD=ON -DFETCHCONTENT_QUIET=OFF -DCMAKE_CXX_COMPILER=clazy
+    - cmake --build build
+  rules:
+    - if : '$CI_PIPELINE_TRIGGERED == null'
+  cache:
+    key: "$CI_JOB_NAME"
+    paths:
+      - .ccache
+
+# disabled until I find a qt6.5 ppa
+.build-gcc11:
+  stage: build
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/ubuntu:22.04
+  tags: [docker]
+  variables:
+    TRAVIS_OS_NAME: linux
+  before_script:
+    - echo -e "\e[0Ksection_start:`date +%s`:install_deps[collapsed=true]\r\e[0K\e[1m\e[95mInstalling apt dependencies"
+    - apt-get update
+    - apt-get -y install --no-install-suggests --no-install-recommends ca-certificates build-essential ninja-build cmake gcc make automake ccache liblmdb-dev
+        libssl-dev libqt5multimedia5-plugins libqt5multimediagsttools5 libqt5multimediaquick5 libqt5svg5-dev
+        qtmultimedia5-dev qtquickcontrols2-5-dev qttools5-dev qttools5-dev-tools qtdeclarative5-dev
+        qml-module-qtmultimedia qml-module-qtquick-controls2 qml-module-qtquick-layouts qml-module-qt-labs-platform
+        qt5keychain-dev ccache libcurl4-openssl-dev libevent-dev libspdlog-dev git nlohmann-json3-dev libcmark-dev asciidoc time # libolm-dev
+    # need recommended deps for wget
+    - apt-get -y install wget
+    - /usr/sbin/update-ccache-symlinks
+    - rm -rf ../.hunter &&  mv .hunter ../.hunter || true
+    - echo -e "\e[0Ksection_end:`date +%s`:install_deps\r\e[0K"
+  script:
+    - export PATH="/usr/lib/ccache:${PATH}"
+    - cmake -GNinja -H. -Bbuild
+        -DCMAKE_INSTALL_PREFIX=.deps/usr
+        -DHUNTER_ROOT="../.hunter"
+        -DHUNTER_ENABLED=ON -DBUILD_SHARED_LIBS=OFF -DUSE_BUNDLED_OPENSSL=ON -DUSE_BUNDLED_LMDB=OFF -DUSE_BUNDLED_QTKEYCHAIN=OFF
+        -DVOIP=OFF
+        -DCMAKE_BUILD_TYPE=Release -DHUNTER_CONFIGURATION_TYPES=Release
+        -DCI_BUILD=ON -DFETCHCONTENT_QUIET=OFF
+        -DJSON_ImplicitConversions=OFF
+    - /usr/bin/time cmake --build build
+  after_script:
+    - mv ../.hunter .hunter
+  rules:
+    - if : '$CI_PIPELINE_TRIGGERED == null'
+  cache:
+    key: "$CI_JOB_NAME"
+    paths:
+      - .hunter/
+      - .ccache
+
+build-tw:
+  stage: build
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/opensuse/tumbleweed
+  tags: [docker]
+  variables:
+    TRAVIS_OS_NAME: linux
+  before_script:
+    - echo -e "\e[0Ksection_start:`date +%s`:install_deps[collapsed=true]\r\e[0K\e[1m\e[95mInstalling apt dependencies"
+    - >
+        zypper --non-interactive install
+        "appstream-glib"
+        "asciidoc"
+        "ccache"
+        "cmake"
+        "cmark-devel"
+        "desktop-file-utils"
+        "gcc-c++"
+        "git"
+        "libappstream-glib8"
+        "lmdb-devel"
+        "memory-constraints"
+        "ninja"
+        "nlohmann_json-devel"
+        "olm-devel"
+        "openssl-devel"
+        "pkgconfig"
+        "spdlog-devel"
+        "zlib-devel"
+        "libQt5PlatformHeaders-devel"
+        "cmake(re2)"
+        "cmake(Qt6Core)"
+        "cmake(Qt6DBus)"
+        "cmake(Qt6Keychain)"
+        "cmake(Qt6LinguistTools)"
+        "cmake(Qt6Multimedia)"
+        "cmake(Qt6QuickControls2)"
+        "cmake(Qt6Svg)"
+        "cmake(Qt6Widgets)"
+        "cmake(Qt6Gui)"
+        "pkgconfig(libcurl)"
+        "pkgconfig(libevent)"
+        "pkgconfig(gstreamer-webrtc-1.0)"
+        "pkgconfig(xcb)"
+        "pkgconfig(xcb-ewmh)"
+        "time"
+    - echo -e "\e[0Ksection_end:`date +%s`:install_deps\r\e[0K"
+  script:
+    - export PATH="/usr/lib64/ccache:${PATH}"
+    - cmake -GNinja -H. -Bbuild
+        -DCMAKE_INSTALL_PREFIX=.deps/usr
+        -DUSE_BUNDLED_MTXCLIENT=ON -DUSE_BUNDLED_COEURL=ON -DUSE_BUNDLED_LMDBXX=ON
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_CXX_FLAGS="-Wno-error=array-bounds"
+        -DCI_BUILD=ON -DFETCHCONTENT_QUIET=OFF
+        # temporarily disabled because of mtxclient failures
+        #-DJSON_ImplicitConversions=OFF
+    - /usr/bin/time cmake --build build
+  rules:
+    - if : '$CI_PIPELINE_TRIGGERED == null'
+  cache:
+    key: "$CI_JOB_NAME"
+    paths:
+      - .ccache
+
+build-macos:
+  stage: build
+  tags: [macos]
+  before_script:
+    - rm -rf ../.hunter &&  mv .hunter ../.hunter || true
+  script:
+    - ./.ci/macos/build.sh
+  after_script:
+    - mv ../.hunter .hunter
+  rules:
+    - if : '$CI_PIPELINE_TRIGGERED == null'
+  artifacts:
+    paths:
+      - nheko.app # not putting this in 'artifacts' subdir because we don't want to put it on releases
+    name: nheko-${CI_COMMIT_SHORT_SHA}-macos-app
+    expose_as: 'macos-app'
+    public: false
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+      - .hunter/
+      - "${CCACHE_DIR}"
+
+codesign-macos:
+  stage: sign
+  tags: [macos]
+  variables:
+    PLAT: "intel"
+  before_script:
+    - pip3 install dmgbuild
+  script:
+    - export PATH=/usr/local/opt/qt@5/bin/:${PATH}
+    - ./.ci/macos/notarize.sh
+  after_script:
+    - ./.ci/upload-nightly-gitlab.sh artifacts/nheko-${CI_COMMIT_SHORT_SHA}-${PLAT}.dmg
+  needs:
+    - job: build-macos
+      optional: true # optional since we want to be able to also trigger this job from cirrus ci for apple silicon builds.
+  rules:
+    - if : '$CI_PIPELINE_TRIGGERED && $CI_COMMIT_REF_PROTECTED == "true"'
+      variables:
+        PLAT: "apple_silicon"
+    - if : '$CI_COMMIT_BRANCH == "master"'
+    - if : $CI_COMMIT_TAG
+  artifacts:
+    paths:
+      - artifacts/nheko-${CI_COMMIT_SHORT_SHA}-${PLAT}.dmg
+      - /tmp/notarize*
+    name: nheko-${CI_COMMIT_SHORT_SHA}-macos
+
+build-flatpak:
+  stage: build
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/ubuntu:latest
+  #image: 'registry.gitlab.gnome.org/gnome/gnome-runtime-images/gnome:master'
+  tags: 
+    - docker-${ARCH}
+  parallel:
+    matrix:
+      - ARCH: amd64
+        JOBS: 0
+      - ARCH: arm64
+        JOBS: 3
+  before_script:
+    - echo -e "\e[0Ksection_start:`date +%s`:install_deps[collapsed=true]\r\e[0K\e[1m\e[95mInstalling apt dependencies"
+    - apt-get update && apt-get -y install flatpak-builder git python3 curl python3-aiohttp python3-tenacity gir1.2-ostree-1.0
+    - echo -e "\e[0Ksection_end:`date +%s`:install_deps\r\e[0K"
+    - flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+      # see https://github.com/flatpak/flatpak-builder/issues/495
+    - git config --global protocol.file.allow always
+  script:
+    - export VERSION=$(git describe)
+    - mkdir -p build-flatpak
+    - cd build-flatpak
+    - echo -e "\e[0Ksection_start:`date +%s`:build_flatpak[collapsed=true]\r\e[0K\e[1m\e[95mBuilding flatpak"
+    - flatpak-builder --install-deps-from=flathub --user --disable-rofiles-fuse --ccache --repo=repo --default-branch=${CI_COMMIT_REF_NAME//\//_} --subject="Build of Nheko ${VERSION} `date` for ${ARCH}" app ../im.nheko.Nheko.yaml --jobs=$JOBS
+    - echo -e "\e[0Ksection_end:`date +%s`:build_flatpak\r\e[0K"
+    - flatpak build-bundle repo nheko-${ARCH}.flatpak im.nheko.Nheko ${CI_COMMIT_REF_NAME//\//_}
+  after_script:
+    - echo -e "\e[0Ksection_start:`date +%s`:upload_flatpak[collapsed=true]\r\e[0K\e[1m\e[95mUploading flatpak"
+    - bash ./.ci/upload-nightly-gitlab.sh build-flatpak/nheko-${ARCH}.flatpak
+    - (cd ./scripts && ./upload-to-flatpak-repo.sh ../build-flatpak/repo) || exit_code=$?
+    - echo -e "\e[0Ksection_end:`date +%s`:upload_flatpak\r\e[0K"
+  rules:
+    - if : '$CI_PIPELINE_TRIGGERED == null'
+  cache:
+    key: "$CI_JOB_NAME"
+    paths:
+      - build-flatpak/.flatpak-builder/
+    when: always # because the arm runner is slow and ooms often otherwise!
+  artifacts:
+    expose_as: 'flatpak'
+    paths: ['build-flatpak/nheko-${ARCH}.flatpak']
+    name: flatpak-${CI_COMMIT_REF_NAME}-${VERSION}-${ARCH}
+
+# disabled until I find a qt6.5 ppa for Ubuntu
+.appimage-amd64:
+  stage: build
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/ubuntu:22.04
+  tags: [docker]
+  allow_failure: true
+  before_script:
+    - echo -e "\e[0Ksection_start:`date +%s`:install_deps[collapsed=true]\r\e[0K\e[1m\e[95mInstalling apt dependencies"
+
+    # Installing the packages needed to download and install third-party tools
+    - apt-get update && apt-get install -y software-properties-common git wget curl python3 python3-pip python3-setuptools
+
+    # Installing the packages needed to compile nheko and third-party tools
+    - apt-get -y install --no-install-suggests --no-install-recommends ca-certificates build-essential ninja-build cmake gcc make automake ccache liblmdb-dev 
+        libssl-dev libqt5multimedia5-plugins libqt5multimediagsttools5 libqt5multimediaquick5 libqt5svg5-dev 
+        qtmultimedia5-dev qtquickcontrols2-5-dev qttools5-dev qttools5-dev-tools qtdeclarative5-dev 
+        qml-module-qtmultimedia qml-module-qtquick-controls2 qml-module-qtquick-layouts qml-module-qt-labs-platform 
+        qt5keychain-dev ccache libcurl4-openssl-dev libevent-dev libspdlog-dev nlohmann-json3-dev libcmark-dev asciidoc libre2-dev libgtest-dev libgl1-mesa-dev qml-module-qtquick-particles2
+
+    # Installing the packages needed to build AppImage
+    - apt-get -yq install breeze-icon-theme desktop-file-utils elfutils fakeroot file gnupg2 gtk-update-icon-cache libgdk-pixbuf2.0-dev libgdk-pixbuf2.0-0 libglib2.0-bin librsvg2-dev libyaml-dev strace zsync squashfs-tools
+
+    - wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O /usr/local/bin/appimagetool && \
+    - chmod +x /usr/local/bin/appimagetool
+
+    - export HOME_DIR=$(pwd)
+
+    # Workaround for https://github.com/AppImageCrafters/appimage-builder/issues/280
+    - cd /tmp
+    - git clone https://github.com/AppImageCrafters/appimage-builder
+    - cd appimage-builder
+    - git checkout 9733877eed75aea0fa8e9a1cd26c22d77a10aa4a
+    - pip3 install .
+    - pip3 install cffi
+    - cd $HOME_DIR
+
+    - /usr/sbin/update-ccache-symlinks
+    - rm -rf ../.hunter &&  mv .hunter ../.hunter || true
+
+    - echo -e "\e[0Ksection_end:`date +%s`:install_deps\r\e[0K"
+    
+  script:
+    - export PATH="/usr/local/bin/:/usr/lib/ccache:${PATH}"
+    - cmake -GNinja -H. -Bbuild
+        -DCMAKE_INSTALL_PREFIX=/usr
+        -DHUNTER_ROOT=".hunter"
+        -DHUNTER_ENABLED=ON -DBUILD_SHARED_LIBS=OFF -DUSE_BUNDLED_OPENSSL=ON -DUSE_BUNDLED_LMDB=OFF -DUSE_BUNDLED_QTKEYCHAIN=OFF -DUSE_BUNDLED_LIBEVENT=OFF
+        -DVOIP=OFF -DMAN=OFF
+        -DCMAKE_BUILD_TYPE=Release -DHUNTER_CONFIGURATION_TYPES=Release
+        -DCI_BUILD=ON -DFETCHCONTENT_QUIET=OFF
+        -DJSON_ImplicitConversions=OFF
+    - DESTDIR=`pwd`/AppDir ninja -C build install/local
+    - DESTDIR=`pwd`/AppDir ninja -C build _deps/cmark-build/src/install
+    - mkdir -p AppDir/usr/lib/x86_64-linux-gnu AppDir/lib/x86_64-linux-gnu
+    - appimage-builder --skip-test
+  after_script:
+    - mkdir -p artifacts && cp nheko-latest-x86_64.AppImage artifacts/
+    - bash ./.ci/upload-nightly-gitlab.sh nheko-latest-x86_64.AppImage
+  rules:
+    - if : '$CI_PIPELINE_TRIGGERED == null'
+  artifacts:
+    paths:
+      - 'artifacts/nheko-latest-x86_64.AppImage'
+    expire_in: 1 week
+    expose_as: 'appimage-amd64'
+  cache:
+    key: "$CI_JOB_NAME"
+    paths:
+      - .hunter/
+      - .ccache
+
+linting:
+  stage: build
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:latest
+  tags: [docker]
+  before_script:
+    - apk update && apk add make git python3 py3-pip
+    - apk add clang-extra-tools --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main
+    - export PATH="$PATH:/root/.local/bin"
+    - pip3 install --user reuse
+  script:
+    - make lint
+    - make license
+  rules:
+    - if : '$CI_PIPELINE_TRIGGERED == null'
+
+github-release:
+  stage: deploy
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:latest
+  tags: [docker]
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+  dependencies:
+    #- appimage-amd64 <- disabled because of missing packages
+    - build-flatpak
+    - codesign-macos
+  before_script:
+    - apk update && apk add jq curl perl
+  script:
+    - ./.ci/update-github-release.sh
